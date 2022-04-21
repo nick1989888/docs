@@ -42,7 +42,7 @@ class ConfigOptionRole(XRefRole):
         if not has_explicit_title:
             target = target.lstrip('~')  # only has a meaning for the title
             # if the first character is a tilde, don't display the section part of the contents
-            if title[0:1] == '~':
+            if title.startswith('~'):
                 title = title[1:]
                 dot = title.rfind('.')
                 if dot != -1:
@@ -71,25 +71,22 @@ class ConfigOptionDirective(ObjectDescription):
 
     def handle_signature(self, sig, signode) -> Tuple[str, str]:
         parts = sig.split(sep='.', maxsplit=1)
-        if len(parts) > 1:
-            section, option = parts
-        else:
-            section, option = '', sig
+        section, option = parts if len(parts) > 1 else ('', sig)
         signode += addnodes.desc_name(text=option)
         if 'mandatory' in self.options:
             annotation = self.options['mandatory']
-            if annotation:
-                annotation = ' (mandatory: {})'.format(annotation)
-            else:
-                annotation = ' (mandatory)'
+            annotation = f' (mandatory: {annotation})' if annotation else ' (mandatory)'
             signode += addnodes.desc_annotation(annotation, annotation)
         return section, option
 
     def add_target_and_index(self, name, sig, signode):
-        anchor = 'config-option-%s' % sig.lower()
+        anchor = f'config-option-{sig.lower()}'
         signode['ids'].append(anchor)
-        aliases = ['config-option-%s' % alias.lower()
-                   for alias in self.options.get('aliases', [])]
+        aliases = [
+            f'config-option-{alias.lower()}'
+            for alias in self.options.get('aliases', [])
+        ]
+
         for alias_anchor in aliases:
             signode['ids'].append(alias_anchor)
         config = self.env.get_domain('stconf')
@@ -124,25 +121,21 @@ class SyncthingConfigDomain(Domain):
         return self.data.setdefault('options', {})  # fullname -> (docname, node_id)
 
     def get_full_qualified_name(self, node):  # FIXME: what is this for?!
-        return '{}.{}'.format('stconf-opt', node.arguments[0])
+        return f'stconf-opt.{node.arguments[0]}'
 
     def get_objects(self) -> Iterator[Tuple[str, str, str, str, str, int]]:
-        for obj in self.config_options.values():
-            yield obj
+        yield from self.config_options.values()
 
     def resolve_xref(self, env: BuildEnvironment, fromdocname: str, builder: Builder,
                      typ: str, target: str, node: pending_xref, contnode: Element
                      ) -> Element:
         searches = [target]
         if '.' not in target:
-            searches += ['{}.{}'.format(section, target)
-                         for section in self.config_sections]
+            searches += [f'{section}.{target}' for section in self.config_sections]
         match = [(docname, anchor)
                  for name, sig, typ, docname, anchor, prio
                  in self.get_objects() if sig in searches]
-        match = list(match)
-
-        if len(match) > 0:
+        if match := list(match):
             todocname = match[0][0]
             targ = match[0][1]
 
@@ -153,7 +146,7 @@ class SyncthingConfigDomain(Domain):
 
     def add_config_option(self, signature, section, option, anchor, location=None):
         """Add a new option anchor to the domain."""
-        name = '{}.{}'.format('stconf-opt', signature)
+        name = f'stconf-opt.{signature}'
         if section:
             self.config_sections.add(section)
         if signature in self.config_options:
